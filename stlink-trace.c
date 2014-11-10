@@ -25,11 +25,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include "ncurses.h"
-#include "stlink-trace.h"
-#include "stdio.h"
-#include "libusb-1.0/libusb.h"
 #include <getopt.h>
+#include <libusb-1.0/libusb.h>
+
+#include "system.h"
+#include "stlink-trace.h"
 
 libusb_context* ctx = 0;
 libusb_device_handle* stlinkhandle = 0;
@@ -52,7 +52,7 @@ void EnterDebugState();
 int ReadTraceData(int toscreen, int byteCount);
 void RunCore();
 void StepCore();
-void GetVersion();
+void _GetVersion();
 int GetCurrentMode();
 void GetTargetVoltage();
 int SendAndReceive(unsigned char* txBuffer, size_t txSize, unsigned char* rxBuffer, size_t rxSize);
@@ -71,11 +71,32 @@ FILE* resultsFile = NULL;
 FILE* fullResultsFile = NULL;
 int debugEnabled = 0;
 
+static void cleanup(int signal __attribute__((unused)))
+{
+     if (connected_stlink)
+     {
+	     /* Switch back to mass storage mode before closing. */
+	     stlink_run(connected_stlink);
+	     stlink_exit_debug_mode(connected_stlink);
+	     stlink_close(connected_stlink);
+     }
+
+     exit(1);
+}
+
 int main(int argc, char** argv)
 {
      int ret, pos, opt = 0;
      char* filename = "trace.txt";
      char* fullTraceFilename = "trace-full.txt";
+
+#ifdef __MINGW32__
+     setbuf(stdout, NULL);
+     setbuf(stderr, NULL);
+#endif
+
+     signal(SIGINT, &cleanup);
+     signal(SIGTERM, &cleanup);
 
      while ((opt = getopt(argc, argv, "f:t:d")) != -1) {
     	 switch (opt) {
@@ -173,7 +194,7 @@ int main(int argc, char** argv)
      //============================
 
      GetCurrentMode();
-     GetVersion();
+     _GetVersion();
 
      //libusb_clear_halt(stlinkhandle, 0x81);
 
@@ -555,7 +576,8 @@ void GetTargetVoltage()
     }
 }
 
-void GetVersion()
+/* TODO: GetVersion conflict */
+void _GetVersion()
 {
      size_t txSize = 16;
      unsigned char rxBuffer[100];
